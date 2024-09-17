@@ -5,7 +5,7 @@ from . import models
 class bookserlaizer(serializers.ModelSerializer):
   class Meta:
     model=models.book
-    fields='__all__'
+    fields=['title','cover','stock','price','id']
 
 
   extra_kwargs={
@@ -15,7 +15,12 @@ class bookserlaizer(serializers.ModelSerializer):
 class userser(serializers.ModelSerializer):
    class Meta:
     model=User
-    fields=['username','first_name','password']
+    fields=['username','email','password']
+
+class buyerser(serializers.ModelSerializer):
+  class Meta:
+    model=models.buyer
+    fields='__all__'
 
 
 class profileser(serializers.ModelSerializer):
@@ -23,3 +28,8 @@ class profileser(serializers.ModelSerializer):
     model= models.profile
     fields= '__all__'
 
+
+class bookauthserlaizer(serializers.ModelSerializer):
+  class Meta:
+    model=models.book
+    fields='__all__'

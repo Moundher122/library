@@ -133,7 +133,12 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.TokenAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',
         
     ],
 }
+ALLOWED_HOSTS=[
+  '192.168.1.6',
+  '192.168.1.7',
+  '127.0.0.1'
+]

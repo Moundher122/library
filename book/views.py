@@ -6,9 +6,9 @@ from . import serlaizers
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import logout
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from django.http import HttpResponse
-
 # Create your views here.
 @api_view(['POST'])
 def register(request):
@@ -19,7 +19,7 @@ def register(request):
     user.set_password(request.data['password'])
     user.save()
     token=Token.objects.create(user=user)
-    return Response({'token':token.key,'user':ser.data})
+    return Response({'token':token.key,'user':ser.data,'created':user.date_joined})
   else:
     return Response(ser.errors,status=status.HTTP_400_BAD_REQUEST)
 @api_view(['POST'])
@@ -28,8 +28,8 @@ def login(request):
     user=models.User.objects.get(username=request.data['username'])
     ser=serlaizers.userser(user)
     if user.check_password(request.data['password']):
-      token=Token.objects.create(user=user)
-      return Response({'token':token.key,'user':ser.data})
+      token,create=Token.objects.get_or_create(user=user)
+      return Response({'token':token.key,'user':ser.data,'created':user.date_joined})
     else:
      return Response({'uncorect pass'},status=status.HTTP_400_BAD_REQUEST)
  except models.User.DoesNotExist:
@@ -41,19 +41,21 @@ def logout_view(request):
       return Response({'item delited'})
     else:
       return Response({'you are unathu'})
+    
 @api_view(['DELETE'])
-def deleteacount(request,token):
+def deleteacount(request):
+  token=request.headers.get('Authorization')
   try:
     t=Token.objects.get(key=token)
     t.user.delete()
     return Response({'remmoved'})
   except Token.DoesNotExist:
     return Response(status=400)  
-
-
+  
 class addbook(APIView):
   permission_classes=[IsAuthenticated]
   def post(self,request):
+    print(request.data)
     ser=serlaizers.bookserlaizer(data=request.data)
     if ser.is_valid():
      ser.save()
@@ -65,28 +67,100 @@ class addbook(APIView):
     else:
      return Response(ser.errors,status=404)
     
+class getbooks(APIView):
+  permission_classes=[IsAuthenticated]
+  def get(self,request):
+    books=models.book.objects.all()
+    m=[]
+    for book in books :
+      se=serlaizers.bookserlaizer(book)
+      m.append({'book':se.data,'author':serlaizers.userser(book.author).data['username'],'buyer':book.buyers.count()})
+    return Response({'books':m})
+
+
+class getbooksuadd(APIView):
+  permission_classes=[IsAuthenticated]
+  def get(self,request):
+    try:
+      bk=models.book.objects.filter(author=request.user)
+      m=[]
+      for book in bk :
+       se=serlaizers.bookserlaizer(book)
+       m.append({'book':se.data,'author':serlaizers.userser(book.author).data['username'],'buyer':book.buyers.count()})
+      return Response({'books':m})
+    except models.book.DoesNotExist:
+      return Response(status=401)
+    
+
 class buybook(APIView):
   permission_classes=[IsAuthenticated]
   def post(self,request):
     hedar=request.headers.get('book')
     bok=models.book.objects.get(pk=hedar)
-    bok.buyer.add(request.user)
-    bok.save()
-    se=serlaizers.bookserlaizer(bok)
-    return Response(se.data)
-
+    if bok.stock>=1:
+      ser=serlaizers.buyerser(data=request.data)
+      if ser.is_valid():
+        ser.save()
+        buyer=models.buyer.objects.get(pk=ser.data['id'])
+        buyer.user=request.user
+        buyer.save()
+        bok.buyers.add(buyer)
+        bok.stock=bok.stock-1
+        bok.save()
+        se=serlaizers.bookserlaizer(bok)
+        return Response(se.data)
+      else:
+        return Response(status=400)
+    else:
+      return Response({'this item is out of the stock'})
+    
 class profilepic(APIView):
   permission_classes=[IsAuthenticated]
   def post(self,request):
-    se=serlaizers.profileser(data=request.data)
-    if se.is_valid():
-      se.save()
-      prof=models.profile.objects.get(pk=se.data['id'])
-      prof.user=request.user
-      prof.save()
-      return HttpResponse (prof.user)
-    else:
-      return Response (se.errors)
+    try:
+      user=models.profile.objects.get(user=request.user)
+      se=serlaizers.profileser(user,request.data)
+      if se.is_valid():
+       se.save()
+       return Response(se.data)
+      else:
+       return Response (se.errors)
+    except models.profile.DoesNotExist:
+      se=serlaizers.profileser(data=request.data)
+      if se.is_valid():
+       se.save(user=request.user)
+       return Response(se.data)
+      else:
+       return Response (se.errors)
+
+    
+class profilesup(APIView):
+  permission_classes=[IsAuthenticated]
+  def delete(self,request):
+    try:
+       request.user.profile.profilepic.delete() 
+       return Response({'profile is deleted'})
+    except AttributeError:
+      return Response({'user dosent have profile pic'},status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def getprofilepic(request):
+  try:
+    h=models.profile.objects.get(user=request.user)
+    se=serlaizers.profileser(h).data['profilepic']
+    return Response({'pic':se})
+  except models.profile.DoesNotExist:
+    return Response(status=401)
+
+@api_view(['DELETE'])
+def deleterbook(request):
+  hed=request.headers.get('book')
+  book=models.book.objects.get(pk=hed)
+  if book.author==request.user :
+    book.delete()
+    return Response({'item deleted'})
+  else:
+    return Response(status=status.HTTP_401_UNAUTHORIZED)
 
 
 
